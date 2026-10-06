@@ -1,60 +1,35 @@
+# game/raft.py
+
 import pygame
 
 
 class Raft:
     def __init__(
         self,
-        x,
         y,
         width,
-        height,
         screen_width,
         speed=2.5
     ):
-        self.x = float(x)
-        self.y = float(y)
-
         self.width = width
-        self.height = height
-
         self.screen_width = screen_width
-        self.speed = float(speed)
+        self.speed = speed
+        self.height = 56
 
-        # Amount moved during the current frame.
-        self.last_dx = 0
-
-        # The collision rectangle is exactly the same size and
-        # position as the visible raft.
         self.rect = pygame.Rect(
-            int(self.x),
-            int(self.y),
-            self.width,
+            -width,
+            y,
+            width,
             self.height
         )
 
     def update(self):
-        old_x = self.x
+        self.rect.x += self.speed
 
-        # Continuous horizontal movement.
-        self.x += self.speed
-
-        # Wrap around to the left once the raft completely
-        # leaves the right side of the screen.
-        if self.x >= self.screen_width:
-            self.x = -float(self.width)
-
-        self.last_dx = round(
-            self.x - old_x
-        )
-
-        # Keep collision rectangle synchronized with the
-        # visible raft position.
-        self.rect.x = int(round(self.x))
-        self.rect.y = int(round(self.y))
+        if self.rect.left > self.screen_width:
+            self.rect.right = 0
 
     def draw(self, screen):
-        # Visible raft uses the exact same rectangle used
-        # for collision detection.
         pygame.draw.rect(
             screen,
             (125, 80, 35),
@@ -62,8 +37,7 @@ class Raft:
             border_radius=10
         )
 
-        # Wooden planks.
-        plank_height = 8
+        plank_h = 8
 
         for y in range(
             self.rect.top + 8,
@@ -77,7 +51,7 @@ class Raft:
                     self.rect.x + 8,
                     y,
                     self.rect.width - 16,
-                    plank_height
+                    plank_h
                 ),
                 border_radius=3
             )

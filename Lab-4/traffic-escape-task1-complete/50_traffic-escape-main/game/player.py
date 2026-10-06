@@ -1,5 +1,3 @@
-# game/player.py
-
 import pygame
 
 
@@ -8,7 +6,11 @@ LANE_W = 80
 
 
 class Player:
-    def __init__(self, x, y):
+    def __init__(
+        self,
+        x,
+        y
+    ):
         self.rect = pygame.Rect(
             x - 20,
             y - 30,
@@ -24,10 +26,14 @@ class Player:
 
         self.move_cooldown = 0
 
-    def move(self, keys, min_x, max_x):
+    def move(
+        self,
+        keys,
+        min_x,
+        max_x
+    ):
         if self.move_cooldown > 0:
             self.move_cooldown -= 1
-            return
 
         dx = 0
         dy = 0
@@ -56,27 +62,32 @@ class Player:
         ):
             dy = 8
 
-        nx = max(
-            min_x,
-            min(
-                max_x - self.rect.width,
-                self.rect.x + dx
+        if dx != 0:
+            if self.move_cooldown == 0:
+                self.rect.x += dx
+
+                self.rect.x = max(
+                    min_x,
+                    min(
+                        max_x - self.rect.width,
+                        self.rect.x
+                    )
+                )
+
+                self.move_cooldown = 12
+
+        if dy != 0:
+            self.rect.y += dy
+
+            self.rect.y = max(
+                0,
+                self.rect.y
             )
-        )
 
-        ny = max(
-            0,
-            self.rect.y + dy
-        )
-
-        if dx:
-            self.rect.x = nx
-            self.move_cooldown = 12
-
-        if dy:
-            self.rect.y = ny
-
-    def draw(self, screen):
+    def draw(
+        self,
+        screen
+    ):
         pygame.draw.rect(
             screen,
             self.color,

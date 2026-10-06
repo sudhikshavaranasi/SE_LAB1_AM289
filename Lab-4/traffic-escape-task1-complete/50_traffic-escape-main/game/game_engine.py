@@ -4,7 +4,7 @@ import json
 import os
 
 from game.player import Player, LANE_W
-from game.traffic import Car, make_car
+from game.traffic import make_car
 from game.raft import Raft
 
 
@@ -13,26 +13,52 @@ WIDTH = LANES * LANE_W
 HEIGHT = 600
 FPS = 60
 
-BG = (60, 60, 60)
+DAY_LENGTH = 30 * FPS
 
-RIVER_TOP = 255
-RIVER_BOTTOM = 345
-RAFT_Y = RIVER_TOP + 8
-RAFT_WIDTH = 260
+BG_DAY = (60, 60, 60)
+BG_NIGHT = (18, 22, 35)
+
+ROAD_DAY = (60, 60, 60)
+ROAD_NIGHT = (28, 30, 42)
+
+WATER_DAY = (45, 105, 155)
+WATER_NIGHT = (25, 65, 105)
+
+SIDEWALK_DAY = (150, 130, 110)
+SIDEWALK_NIGHT = (65, 65, 75)
 
 MAX_HIGH_SCORES = 5
 
-# Store the score file in the project root.
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCORES_FILE = os.path.join(PROJECT_ROOT, "scores.json")
+RIVER_TOP = 255
+RIVER_BOTTOM = 345
+
+RAFT_Y = RIVER_TOP + 8
+RAFT_WIDTH = 260
+RAFT_HEIGHT = 56
+
+PROJECT_ROOT = os.path.dirname(
+    os.path.dirname(
+        os.path.abspath(__file__)
+    )
+)
+
+SCORES_FILE = os.path.join(
+    PROJECT_ROOT,
+    "scores.json"
+)
 
 
 class GameEngine:
     def __init__(self):
         pygame.init()
 
-        self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
-        pygame.display.set_caption("Traffic Escape")
+        self.screen = pygame.display.set_mode(
+            (WIDTH, HEIGHT)
+        )
+
+        pygame.display.set_caption(
+            "Traffic Escape"
+        )
 
         self.clock = pygame.time.Clock()
 
@@ -53,27 +79,33 @@ class GameEngine:
         self.reset()
 
     # ============================================================
-    # HIGH SCORE SYSTEM
+    # HIGH SCORES
     # ============================================================
 
     def load_scores(self):
-        """
-        Load high scores from scores.json.
-
-        If the file does not exist, create it automatically with
-        an empty score list.
-        """
         if not os.path.exists(SCORES_FILE):
             try:
-                with open(SCORES_FILE, "w", encoding="utf-8") as file:
-                    json.dump([], file, indent=4)
+                with open(
+                    SCORES_FILE,
+                    "w",
+                    encoding="utf-8"
+                ) as file:
+                    json.dump(
+                        [],
+                        file,
+                        indent=4
+                    )
             except OSError:
                 pass
 
             return []
 
         try:
-            with open(SCORES_FILE, "r", encoding="utf-8") as file:
+            with open(
+                SCORES_FILE,
+                "r",
+                encoding="utf-8"
+            ) as file:
                 data = json.load(file)
 
             if not isinstance(data, list):
@@ -82,31 +114,47 @@ class GameEngine:
             scores = []
 
             for score in data:
-                if isinstance(score, (int, float)):
-                    scores.append(int(score))
+                if isinstance(
+                    score,
+                    (int, float)
+                ):
+                    scores.append(
+                        int(score)
+                    )
 
-            scores.sort(reverse=True)
+            scores.sort(
+                reverse=True
+            )
 
             return scores[:MAX_HIGH_SCORES]
 
-        except (json.JSONDecodeError, OSError):
+        except (
+            json.JSONDecodeError,
+            OSError
+        ):
             return []
 
     def save_score(self):
-        """
-        Add the current score to the high score table, sort it from
-        highest to lowest, keep only the top five, and save it.
-        """
         score = self.score // 10
 
-        self.high_scores.append(score)
+        self.high_scores.append(
+            score
+        )
 
-        self.high_scores.sort(reverse=True)
+        self.high_scores.sort(
+            reverse=True
+        )
 
-        self.high_scores = self.high_scores[:MAX_HIGH_SCORES]
+        self.high_scores = self.high_scores[
+            :MAX_HIGH_SCORES
+        ]
 
         try:
-            with open(SCORES_FILE, "w", encoding="utf-8") as file:
+            with open(
+                SCORES_FILE,
+                "w",
+                encoding="utf-8"
+            ) as file:
                 json.dump(
                     self.high_scores,
                     file,
@@ -118,7 +166,7 @@ class GameEngine:
         self.score_saved = True
 
     # ============================================================
-    # RESET / GAME STATE
+    # RESET
     # ============================================================
 
     def reset(self):
@@ -136,25 +184,38 @@ class GameEngine:
         self.spawn_interval = 50
         self.speed = 3
 
-        # Existing scoring system.
         self.score = 0
 
-        # Existing 3-lives system.
+        # Existing 3 lives system.
         self.lives = 3
 
         self.game_over = False
         self.won = False
 
         self.hit_cooldown = 0
-
-        # Prevent the same game from being saved multiple times.
         self.score_saved = False
 
+        # ========================================================
+        # DAY / NIGHT STATE
+        # ========================================================
+
+        # Number of frames elapsed in the current day/night cycle.
+        self.day_night_timer = 0
+
+        # False = day
+        # True  = night
+        self.is_night = False
+
+        # ========================================================
+        # RAFT
+        # ========================================================
+
         self.raft = Raft(
-            RAFT_Y,
-            RAFT_WIDTH,
-            WIDTH,
-            2.5
+            y=RAFT_Y,
+            width=RAFT_WIDTH,
+            height=RAFT_HEIGHT,
+            screen_width=WIDTH,
+            speed=2.5
         )
 
     # ============================================================
@@ -176,16 +237,31 @@ class GameEngine:
         return True
 
     # ============================================================
-    # GAME UPDATE
+    # DAY / NIGHT
+    # ============================================================
+
+    def update_day_night(self):
+        self.day_night_timer += 1
+
+        if self.day_night_timer >= DAY_LENGTH:
+            self.day_night_timer = 0
+
+            self.is_night = not self.is_night
+
+    # ============================================================
+    # UPDATE
     # ============================================================
 
     def update(self):
         if self.game_over or self.won:
             return
 
+        # Day/night continues automatically throughout gameplay.
+        self.update_day_night()
+
         keys = pygame.key.get_pressed()
 
-        # Existing player movement.
+        # Existing player controls.
         self.player.move(
             keys,
             0,
@@ -198,19 +274,48 @@ class GameEngine:
         if self.hit_cooldown > 0:
             self.hit_cooldown -= 1
 
-        # --------------------------------------------------------
+        # ========================================================
         # RAFT LANE
-        # --------------------------------------------------------
+        # ========================================================
 
-        player_in_river = (
+        player_in_raft_lane = (
             RIVER_TOP
             <= self.player.rect.centery
             <= RIVER_BOTTOM
         )
 
-        # --------------------------------------------------------
-        # TRAFFIC SPAWNING
-        # --------------------------------------------------------
+        if (
+            player_in_raft_lane
+            and self.hit_cooldown == 0
+        ):
+            on_raft = self.player.rect.colliderect(
+                self.raft.rect
+            )
+
+            if on_raft:
+                # Carry player horizontally with raft.
+                self.player.rect.x += (
+                    self.raft.last_dx
+                )
+
+                # Keep player inside screen.
+                self.player.rect.x = max(
+                    0,
+                    min(
+                        WIDTH - self.player.rect.width,
+                        self.player.rect.x
+                    )
+                )
+
+            else:
+                # In raft lane but not on raft.
+                self._lose_life()
+
+                return
+
+        # ========================================================
+        # TRAFFIC
+        # ========================================================
 
         self.timer += 1
 
@@ -235,25 +340,20 @@ class GameEngine:
                 self.spawn_interval - 0.2
             )
 
-        # --------------------------------------------------------
-        # TRAFFIC MOVEMENT / COLLISION
-        # --------------------------------------------------------
-
         for car in self.cars:
-
             car.update()
 
             if (
                 self.hit_cooldown == 0
-                and not player_in_river
+                and not player_in_raft_lane
                 and car.rect.colliderect(
                     self.player.rect
                 )
             ):
                 self._lose_life()
 
-                # Prevent the same car from immediately hitting
-                # the newly respawned player.
+                # Prevent the same car from immediately
+                # hitting the respawned player.
                 car.rect.y = HEIGHT + 200
 
                 break
@@ -264,42 +364,9 @@ class GameEngine:
             if not car.off_screen(HEIGHT)
         ]
 
-        # --------------------------------------------------------
-        # RAFT COLLISION / CARRYING
-        # --------------------------------------------------------
-
-        if (
-            player_in_river
-            and self.hit_cooldown == 0
-        ):
-            on_raft = self.player.rect.colliderect(
-                self.raft.rect
-            )
-
-            if on_raft:
-                # Carry the player horizontally with the raft.
-                self.player.rect.x += round(
-                    self.raft.speed
-                )
-
-                # Keep player inside the screen.
-                self.player.rect.x = max(
-                    0,
-                    min(
-                        WIDTH - self.player.rect.width,
-                        self.player.rect.x
-                    )
-                )
-
-            else:
-                # Player is in the river but not on the raft.
-                self._lose_life()
-
-                return
-
-        # --------------------------------------------------------
-        # EXISTING SCORING
-        # --------------------------------------------------------
+        # ========================================================
+        # SCORING
+        # ========================================================
 
         self.score += 1
 
@@ -309,9 +376,9 @@ class GameEngine:
                 self.speed + 0.5
             )
 
-        # --------------------------------------------------------
-        # EXISTING WIN CONDITION
-        # --------------------------------------------------------
+        # ========================================================
+        # WIN CONDITION
+        # ========================================================
 
         if self.player.rect.top <= 10:
             self.won = True
@@ -345,41 +412,116 @@ class GameEngine:
     # ============================================================
 
     def draw(self):
-        self.screen.fill(BG)
+        if self.is_night:
+            self.screen.fill(
+                BG_NIGHT
+            )
+        else:
+            self.screen.fill(
+                BG_DAY
+            )
 
-        # --------------------------------------------------------
-        # ROAD MARKINGS
-        # --------------------------------------------------------
+        # ========================================================
+        # ROAD
+        # ========================================================
 
-        for i in range(LANES + 1):
+        road_color = (
+            ROAD_NIGHT
+            if self.is_night
+            else ROAD_DAY
+        )
+
+        pygame.draw.rect(
+            self.screen,
+            road_color,
+            pygame.Rect(
+                0,
+                0,
+                WIDTH,
+                HEIGHT
+            )
+        )
+
+        # ========================================================
+        # LANE LINES
+        # ========================================================
+
+        if self.is_night:
+            lane_color = (
+                70,
+                70,
+                90
+            )
+
+            marking_color = (
+                150,
+                150,
+                90
+            )
+        else:
+            lane_color = (
+                100,
+                100,
+                100
+            )
+
+            marking_color = (
+                200,
+                200,
+                100
+            )
+
+        for i in range(
+            LANES + 1
+        ):
             pygame.draw.line(
                 self.screen,
-                (100, 100, 100),
-                (i * LANE_W, 0),
-                (i * LANE_W, HEIGHT),
+                lane_color,
+                (
+                    i * LANE_W,
+                    0
+                ),
+                (
+                    i * LANE_W,
+                    HEIGHT
+                ),
                 2
             )
 
-        for y in range(0, HEIGHT, 60):
-            for i in range(LANES):
+        for y in range(
+            0,
+            HEIGHT,
+            60
+        ):
+            for i in range(
+                LANES
+            ):
                 pygame.draw.rect(
                     self.screen,
-                    (200, 200, 100),
+                    marking_color,
                     pygame.Rect(
-                        i * LANE_W + LANE_W // 2 - 3,
+                        i * LANE_W
+                        + LANE_W // 2
+                        - 3,
                         y,
                         6,
                         30
                     )
                 )
 
-        # --------------------------------------------------------
+        # ========================================================
         # SIDEWALKS
-        # --------------------------------------------------------
+        # ========================================================
+
+        sidewalk_color = (
+            SIDEWALK_NIGHT
+            if self.is_night
+            else SIDEWALK_DAY
+        )
 
         pygame.draw.rect(
             self.screen,
-            (150, 130, 110),
+            sidewalk_color,
             pygame.Rect(
                 0,
                 HEIGHT - 50,
@@ -390,7 +532,7 @@ class GameEngine:
 
         pygame.draw.rect(
             self.screen,
-            (150, 130, 110),
+            sidewalk_color,
             pygame.Rect(
                 0,
                 0,
@@ -399,20 +541,19 @@ class GameEngine:
             )
         )
 
-        # --------------------------------------------------------
-        # TRAFFIC
-        # --------------------------------------------------------
+        # ========================================================
+        # RAFT / WATER
+        # ========================================================
 
-        for car in self.cars:
-            car.draw(self.screen)
-
-        # --------------------------------------------------------
-        # RIVER / RAFT LANE
-        # --------------------------------------------------------
+        water_color = (
+            WATER_NIGHT
+            if self.is_night
+            else WATER_DAY
+        )
 
         pygame.draw.rect(
             self.screen,
-            (45, 105, 155),
+            water_color,
             pygame.Rect(
                 0,
                 RIVER_TOP,
@@ -420,6 +561,19 @@ class GameEngine:
                 RIVER_BOTTOM - RIVER_TOP
             )
         )
+
+        if self.is_night:
+            water_detail_color = (
+                40,
+                90,
+                135
+            )
+        else:
+            water_detail_color = (
+                70,
+                135,
+                185
+            )
 
         for y in range(
             RIVER_TOP + 12,
@@ -433,9 +587,15 @@ class GameEngine:
             ):
                 pygame.draw.line(
                     self.screen,
-                    (70, 135, 185),
-                    (x, y),
-                    (x + 16, y),
+                    water_detail_color,
+                    (
+                        x,
+                        y
+                    ),
+                    (
+                        x + 16,
+                        y
+                    ),
                     2
                 )
 
@@ -443,17 +603,27 @@ class GameEngine:
             self.screen
         )
 
-        # --------------------------------------------------------
+        # ========================================================
+        # CARS
+        # ========================================================
+
+        for car in self.cars:
+            car.draw(
+                self.screen,
+                night=self.is_night
+            )
+
+        # ========================================================
         # PLAYER
-        # --------------------------------------------------------
+        # ========================================================
 
         self.player.draw(
             self.screen
         )
 
-        # --------------------------------------------------------
+        # ========================================================
         # HUD
-        # --------------------------------------------------------
+        # ========================================================
 
         hud = pygame.Rect(
             0,
@@ -464,7 +634,15 @@ class GameEngine:
 
         pygame.draw.rect(
             self.screen,
-            (20, 20, 20),
+            (
+                10,
+                10,
+                18
+            ) if self.is_night else (
+                20,
+                20,
+                20
+            ),
             hud
         )
 
@@ -492,6 +670,22 @@ class GameEngine:
             (220, 220, 220)
         )
 
+        mode_text = self.font.render(
+            "NIGHT"
+            if self.is_night
+            else "DAY",
+            True,
+            (
+                255,
+                230,
+                120
+            ) if self.is_night else (
+                255,
+                255,
+                255
+            )
+        )
+
         self.screen.blit(
             score_text,
             (6, 4)
@@ -512,9 +706,17 @@ class GameEngine:
             (500, 4)
         )
 
-        # --------------------------------------------------------
-        # GAME OVER / WIN
-        # --------------------------------------------------------
+        self.screen.blit(
+            mode_text,
+            (
+                WIDTH - 75,
+                4
+            )
+        )
+
+        # ========================================================
+        # GAME STATE
+        # ========================================================
 
         if self.game_over:
             self._draw_game_over()
@@ -525,7 +727,7 @@ class GameEngine:
         pygame.display.flip()
 
     # ============================================================
-    # GAME OVER SCREEN
+    # GAME OVER
     # ============================================================
 
     def _draw_game_over(self):
@@ -535,7 +737,7 @@ class GameEngine:
         )
 
         overlay.fill(
-            (0, 0, 0, 150)
+            (0, 0, 0, 160)
         )
 
         self.screen.blit(
@@ -558,7 +760,8 @@ class GameEngine:
         self.screen.blit(
             message,
             (
-                WIDTH // 2 - message.get_width() // 2,
+                WIDTH // 2
+                - message.get_width() // 2,
                 HEIGHT // 2 - 100
             )
         )
@@ -566,7 +769,8 @@ class GameEngine:
         self.screen.blit(
             score_message,
             (
-                WIDTH // 2 - score_message.get_width() // 2,
+                WIDTH // 2
+                - score_message.get_width() // 2,
                 HEIGHT // 2 - 45
             )
         )
@@ -584,7 +788,8 @@ class GameEngine:
         self.screen.blit(
             restart,
             (
-                WIDTH // 2 - restart.get_width() // 2,
+                WIDTH // 2
+                - restart.get_width() // 2,
                 HEIGHT - 45
             )
         )
@@ -600,7 +805,7 @@ class GameEngine:
         )
 
         overlay.fill(
-            (0, 0, 0, 150)
+            (0, 0, 0, 160)
         )
 
         self.screen.blit(
@@ -623,7 +828,8 @@ class GameEngine:
         self.screen.blit(
             message,
             (
-                WIDTH // 2 - message.get_width() // 2,
+                WIDTH // 2
+                - message.get_width() // 2,
                 HEIGHT // 2 - 100
             )
         )
@@ -631,7 +837,8 @@ class GameEngine:
         self.screen.blit(
             score_message,
             (
-                WIDTH // 2 - score_message.get_width() // 2,
+                WIDTH // 2
+                - score_message.get_width() // 2,
                 HEIGHT // 2 - 45
             )
         )
@@ -649,7 +856,8 @@ class GameEngine:
         self.screen.blit(
             restart,
             (
-                WIDTH // 2 - restart.get_width() // 2,
+                WIDTH // 2
+                - restart.get_width() // 2,
                 HEIGHT - 45
             )
         )
@@ -658,7 +866,10 @@ class GameEngine:
     # HIGH SCORE DISPLAY
     # ============================================================
 
-    def _draw_high_scores(self, start_y):
+    def _draw_high_scores(
+        self,
+        start_y
+    ):
         title = self.font.render(
             "TOP 5 SCORES",
             True,
@@ -668,7 +879,8 @@ class GameEngine:
         self.screen.blit(
             title,
             (
-                WIDTH // 2 - title.get_width() // 2,
+                WIDTH // 2
+                - title.get_width() // 2,
                 start_y
             )
         )
@@ -683,7 +895,8 @@ class GameEngine:
             self.screen.blit(
                 empty,
                 (
-                    WIDTH // 2 - empty.get_width() // 2,
+                    WIDTH // 2
+                    - empty.get_width() // 2,
                     start_y + 30
                 )
             )
@@ -702,8 +915,11 @@ class GameEngine:
             self.screen.blit(
                 score_text,
                 (
-                    WIDTH // 2 - score_text.get_width() // 2,
-                    start_y + 30 + index * 25
+                    WIDTH // 2
+                    - score_text.get_width() // 2,
+                    start_y
+                    + 30
+                    + index * 25
                 )
             )
 
